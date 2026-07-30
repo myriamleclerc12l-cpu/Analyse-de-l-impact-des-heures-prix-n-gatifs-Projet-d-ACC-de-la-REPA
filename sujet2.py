@@ -90,6 +90,15 @@ def sommer_courbes(fichiers):
     df_toutes = pd.concat(series_list, axis=1)
     return df_toutes.sum(axis=1, skipna=True)
 
+def charger_toutes_courbes(fichiers):
+    """Charge chaque fichier individuellement. Retourne (dict {nom: série}, série totale sommée)."""
+    courbes = {}
+    for f in fichiers:
+        courbes[f.name] = charger_courbe_w(f)
+    df_toutes = pd.concat(courbes.values(), axis=1, keys=courbes.keys())
+    somme = df_toutes.sum(axis=1, skipna=True)
+    return courbes, somme
+
 # ==========================================================
 # BARRE LATÉRALE — IMPORT ET RÉGLAGES
 # ==========================================================
@@ -352,11 +361,41 @@ with tab4:
                 "dans la barre latérale (section « Données — Production / Consommation ») pour lancer "
                 "cette analyse.")
     else:
-        serie_prod = sommer_courbes(fichiers_prod)
-        serie_conso = sommer_courbes(fichiers_conso)
+        courbes_prod, serie_prod = charger_toutes_courbes(fichiers_prod)
+        courbes_conso, serie_conso = charger_toutes_courbes(fichiers_conso)
 
         st.success(f"{len(fichiers_prod)} fichier(s) de production et {len(fichiers_conso)} fichier(s) "
                    f"de consommation chargés et sommés.")
+        
+        st.markdown("---")
+        st.subheader("Courbes de production et de consommation importées")
+
+        col_v1, col_v2 = st.columns(2)
+        with col_v1:
+            options_prod = list(courbes_prod.keys()) + ["Total (somme)"]
+            choix_prod = st.multiselect("Courbes de production à afficher", options_prod,
+                default=["Total (somme)"], key="choix_courbes_prod")
+        with col_v2:
+            options_conso = list(courbes_conso.keys()) + ["Total (somme)"]
+            choix_conso = st.multiselect("Courbes de consommation à afficher", options_conso,
+                default=["Total (somme)"], key="choix_courbes_conso")
+
+        if choix_prod or choix_conso:
+            fig_courbes = go.Figure()
+            palette_prod = ["#2E7D32", "#66BB6A", "#A5D6A7", "#1B5E20", "#43A047", "#00897B"]
+            for i, nom in enumerate(choix_prod):
+                s = serie_prod if nom == "Total (somme)" else courbes_prod[nom]
+                fig_courbes.add_trace(go.Scatter(x=s.index, y=s / 1000.0, mode="lines",
+                    name=f"Prod — {nom}", line=dict(color=palette_prod[i % len(palette_prod)], width=1.3)))
+            palette_conso = ["#C62828", "#E57373", "#EF9A9A", "#B71C1C", "#D32F2F", "#F06292"]
+            for i, nom in enumerate(choix_conso):
+                s = serie_conso if nom == "Total (somme)" else courbes_conso[nom]
+                fig_courbes.add_trace(go.Scatter(x=s.index, y=s / 1000.0, mode="lines",
+                    name=f"Conso — {nom}", line=dict(color=palette_conso[i % len(palette_conso)], width=1.3)))
+            fig_courbes.update_layout(title="Courbes de production et de consommation importées",
+                xaxis_title="Date", yaxis_title="kW", hovermode="x unified",
+                legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="center", x=0.5))
+            st.plotly_chart(fig_courbes, use_container_width=True)
 
         coupure_30min = (df["Temps_Coupure"] > 0).resample("30min").max().fillna(False).astype(bool)
         prix_30min = df["Prix_Positifs"].resample("30min").mean()
