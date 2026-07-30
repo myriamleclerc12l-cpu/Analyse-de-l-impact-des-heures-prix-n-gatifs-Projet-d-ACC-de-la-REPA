@@ -261,7 +261,7 @@ with tab2:
     st.subheader("Distribution et dynamique des prix")
     df_neg = df[df["Prix_Positifs"] < 0]
     df_coupure_t2 = df[df["Prix_Positifs"] <= seuil_coupure]
-    col_n1, col_n2, col_n3, col_n4, col_n5 = st.columns(5)
+    col_n1, col_n2, col_n3, col_n4 = st.columns(4)
     with col_n1:
         st.markdown(carte_indicateur("Pas en coupure", f"{fmt_fr(len(df_coupure_t2))}",
             "#FFEBEE", "#C62828",
@@ -276,12 +276,6 @@ with tab2:
         st.markdown(carte_indicateur("Prix négatif moyen", f"{fmt_fr(df_neg['Prix_Positifs'].mean(), 2)} €/MWh"
             if len(df_neg) > 0 else "N/A", "#FFF3E0", "#E65100"), unsafe_allow_html=True)
     with col_n4:
-        st.markdown(carte_indicateur("Écart Positifs vs Négatifs (moyenne)",
-            f"{fmt_fr((df['Prix_Negatifs']-df['Prix_Positifs']).mean(), 2)} €/MWh",
-            "#E8F5E9", "#2E7D32",
-            aide="Écart moyen entre le Prix de Règlement des Écarts Négatifs et Positifs sur la période."),
-            unsafe_allow_html=True)
-    with col_n5:
         st.markdown(carte_indicateur("Prix maximum atteint", f"{fmt_fr(df['Prix_Positifs'].max(), 2)} €/MWh",
             "#E3F2FD", "#1565C0"), unsafe_allow_html=True)
 
