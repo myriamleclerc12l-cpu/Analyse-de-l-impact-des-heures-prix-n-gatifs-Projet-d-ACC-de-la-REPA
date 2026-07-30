@@ -284,9 +284,6 @@ with tab2:
             "#E3F2FD", "#1565C0",
             aide="La valeur la plus haute atteinte par le Prix de Règlement des Écarts Positifs sur "
                  "la période — le meilleur cas pour la valorisation du surplus."), unsafe_allow_html=True)
-    with col_n4:
-        st.markdown(carte_indicateur("Prix maximum atteint", f"{fmt_fr(df['Prix_Positifs'].max(), 2)} €/MWh",
-            "#E3F2FD", "#1565C0"), unsafe_allow_html=True)
 
     st.markdown("---")
     fig_ts = go.Figure()
