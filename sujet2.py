@@ -319,14 +319,6 @@ with tab2:
             xaxis_title="Heure de la journée", yaxis_title="")
         st.plotly_chart(fig_heat, use_container_width=True)
 
-    st.subheader("Événements de prix les plus extrêmes")
-    top_negatifs = df.nsmallest(10, "Prix_Positifs")[["Prix_Positifs", "Prix_Negatifs", "Desequilibre", "Tendance"]]
-    top_negatifs.index.name = "Date"
-    st.dataframe(top_negatifs.style.format({
-        "Prix_Positifs": lambda x: f"{fmt_fr(x, 2)} €/MWh",
-        "Prix_Negatifs": lambda x: f"{fmt_fr(x, 2)} €/MWh",
-        "Desequilibre": lambda x: f"{fmt_fr(x, 1)} MWh",
-    }), use_container_width=True)
 
 # ==========================================================
 # ONGLET 3 : ANALYSE DES COUPURES
@@ -388,15 +380,7 @@ with tab3:
             xaxis_title="Seuil de coupure (€/MWh)", yaxis_title="Heures de coupure sur la période")
         st.plotly_chart(fig_sensib, use_container_width=True)
 
-    st.subheader("Épisodes de coupure les plus longs")
-    if len(episodes) > 0:
-        top_episodes = episodes.head(15).copy()
-        top_episodes["Début"] = top_episodes["Début"].dt.strftime("%d/%m/%Y %H:%M")
-        top_episodes["Fin"] = top_episodes["Fin"].dt.strftime("%d/%m/%Y %H:%M")
-        st.dataframe(top_episodes.style.format({"Durée (h)": lambda x: fmt_fr(x, 2)}),
-            use_container_width=True, hide_index=True)
-    else:
-        st.info("Aucun épisode de coupure sur la période et le seuil sélectionnés.")
+
 
 # ==========================================================
 # ONGLET 4 : IMPACT PRODUCTION / CONSOMMATION
