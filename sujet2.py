@@ -223,7 +223,9 @@ with tab1:
             unsafe_allow_html=True)
     with col4:
         st.markdown(carte_indicateur("Prix moyen (Écarts Positifs)", f"{fmt_fr(prix_moyen_pos, 2)} €/MWh",
-            "#E3F2FD", "#1565C0"), unsafe_allow_html=True)
+            "#E3F2FD", "#1565C0",
+            aide="Moyenne du Prix de Règlement des Écarts Positifs sur toute la période — le prix "
+                 "auquel votre surplus de production serait valorisé, en moyenne."), unsafe_allow_html=True)
     with col5:
         st.markdown(carte_indicateur("Prix le plus négatif atteint", f"{fmt_fr(prix_min, 2)} €/MWh",
             "#F3E5F5", "#6A1B9A", aide=f"Atteint le {date_prix_min.strftime('%d/%m/%Y à %Hh%M')}."),
@@ -274,7 +276,14 @@ with tab2:
                  f"plus large que le seuil de coupure ci-contre."), unsafe_allow_html=True)
     with col_n3:
         st.markdown(carte_indicateur("Prix négatif moyen", f"{fmt_fr(df_neg['Prix_Positifs'].mean(), 2)} €/MWh"
-            if len(df_neg) > 0 else "N/A", "#FFF3E0", "#E65100"), unsafe_allow_html=True)
+            if len(df_neg) > 0 else "N/A", "#FFF3E0", "#E65100",
+            aide="Moyenne calculée uniquement sur les pas à prix négatif (< 0 €/MWh) — le coût moyen "
+                 "d'injecter du surplus lors de ces épisodes."), unsafe_allow_html=True)
+    with col_n4:
+        st.markdown(carte_indicateur("Prix maximum atteint", f"{fmt_fr(df['Prix_Positifs'].max(), 2)} €/MWh",
+            "#E3F2FD", "#1565C0",
+            aide="La valeur la plus haute atteinte par le Prix de Règlement des Écarts Positifs sur "
+                 "la période — le meilleur cas pour la valorisation du surplus."), unsafe_allow_html=True)
     with col_n4:
         st.markdown(carte_indicateur("Prix maximum atteint", f"{fmt_fr(df['Prix_Positifs'].max(), 2)} €/MWh",
             "#E3F2FD", "#1565C0"), unsafe_allow_html=True)
@@ -327,18 +336,27 @@ with tab3:
     col_c1, col_c2, col_c3, col_c4 = st.columns(4)
     with col_c1:
         st.markdown(carte_indicateur("Temps de coupure total", f"{fmt_fr(temps_coupure_total)} h",
-            "#FFEBEE", "#C62828"), unsafe_allow_html=True)
+            "#FFEBEE", "#C62828",
+            aide=f"Nombre d'heures où le prix est descendu au seuil de coupure "
+                 f"({fmt_fr(seuil_coupure, 1)} €/MWh) ou en dessous, sur la période."), unsafe_allow_html=True)
     with col_c2:
         st.markdown(carte_indicateur("Nombre d'épisodes", f"{fmt_fr(len(episodes))}",
-            "#FFEBEE", "#C62828"), unsafe_allow_html=True)
+            "#FFEBEE", "#C62828",
+            aide="Un épisode = une séquence continue de pas de 15 min en coupure, sans interruption. "
+                 "Deux coupures séparées par un retour à un prix normal comptent comme 2 épisodes distincts."),
+            unsafe_allow_html=True)
     with col_c3:
         duree_moy = episodes["Durée (h)"].mean() if len(episodes) > 0 else 0
         st.markdown(carte_indicateur("Durée moyenne d'un épisode", f"{fmt_fr(duree_moy, 2)} h",
-            "#FFF3E0", "#E65100"), unsafe_allow_html=True)
+            "#FFF3E0", "#E65100",
+            aide="Durée moyenne d'une coupure continue, tous épisodes confondus sur la période."),
+            unsafe_allow_html=True)
     with col_c4:
         duree_max = episodes["Durée (h)"].max() if len(episodes) > 0 else 0
         st.markdown(carte_indicateur("Épisode le plus long", f"{fmt_fr(duree_max, 2)} h",
-            "#F3E5F5", "#6A1B9A"), unsafe_allow_html=True)
+            "#F3E5F5", "#6A1B9A",
+            aide="La plus longue coupure continue observée sur la période, sans interruption."),
+            unsafe_allow_html=True)
 
     st.markdown("---")
     st.subheader("Répartition mensuelle du temps de coupure")
@@ -556,10 +574,15 @@ with tab4:
             col_r1, col_r2, col_r3 = st.columns(3)
             with col_r1:
                 st.markdown(carte_indicateur("Résultat net — Symphonics", f"{fmt_fr(net_symphonics)} €",
-                    "#F5F5F5", "#616161"), unsafe_allow_html=True)
+                    "#F5F5F5", "#616161",
+                    aide="Recette de rachat du surplus (hors coupure) moins le coût fixe annuel. "
+                         "Aucune recette pendant les heures à prix négatif (centrale à l'arrêt)."),
+                    unsafe_allow_html=True)
             with col_r2:
                 st.markdown(carte_indicateur("Résultat net — Sunflow", f"{fmt_fr(net_sunflow)} €",
-                    "#F5F5F5", "#616161"), unsafe_allow_html=True)
+                    "#F5F5F5", "#616161",
+                    aide="Recette de rachat du surplus (hors coupure) + valorisation PRE+ pendant les "
+                         "heures à prix négatif, moins le coût fixe annuel."), unsafe_allow_html=True)
             with col_r3:
                 couleur_ecart = "#2E7D32" if ecart > 0 else "#C62828"
                 fond_ecart = "#E8F5E9" if ecart > 0 else "#FFEBEE"
