@@ -68,11 +68,27 @@ def detecter_episodes(df_periode, colonne_coupure):
     )
     return episodes.sort_values("Durée (h)", ascending=False).reset_index(drop=True)
 
+def charger_courbe_w(fichier):
+    df_c = pd.read_excel(fichier)
+    df_c["timestamp"] = pd.to_datetime(df_c["timestamp"], utc=True).dt.tz_localize(None)
+    df_c = df_c.set_index("timestamp").sort_index()
+    df_c.columns = ["value_W"]
+    serie = df_c["value_W"]
+    pas_natif = serie.index.to_series().diff().median()
+    if pd.notna(pas_natif) and pas_natif != pd.Timedelta(minutes=30):
+        serie = serie.resample("30min").mean()
+    return serie
+
+def sommer_courbes(fichiers):
+    series_list = [charger_courbe_w(f).rename(f.name) for f in fichiers]
+    df_toutes = pd.concat(series_list, axis=1)
+    return df_toutes.sum(axis=1, skipna=True)
+
 # ==========================================================
 # BARRE LATÉRALE — IMPORT ET RÉGLAGES
 # ==========================================================
 
-st.sidebar.header("Données")
+st.sidebar.header("Données — Prix")
 fichier = st.sidebar.file_uploader("Fichier Excel — Règlement des Écarts", type=["xlsx"])
 
 if fichier is None:
@@ -100,6 +116,15 @@ seuil_coupure = st.sidebar.number_input(
          "Excel est -3 €/MWh."
 )
 
+st.sidebar.markdown("---")
+st.sidebar.header("Données — Production / Consommation")
+st.sidebar.caption("Optionnel — nécessaire uniquement pour l'onglet « Impact Production/Consommation ». "
+                    "Colonnes attendues : timestamp, value (en W).")
+fichiers_prod = st.sidebar.file_uploader("Courbes de production (une ou plusieurs)", type=["xlsx"],
+    accept_multiple_files=True, key="fichiers_prod_uploader")
+fichiers_conso = st.sidebar.file_uploader("Courbes de consommation (une ou plusieurs)", type=["xlsx"],
+    accept_multiple_files=True, key="fichiers_conso_uploader")
+
 df = df_complet.loc[str(date_debut):str(date_fin)].copy()
 if df.empty:
     st.warning("Aucune donnée sur la période sélectionnée.")
@@ -112,7 +137,8 @@ st.title("Analyse des Prix Négatifs et des Coupures")
 st.caption(f"Période analysée : du {date_debut.strftime('%d/%m/%Y')} au {date_fin.strftime('%d/%m/%Y')} "
            f"— seuil de coupure appliqué : {fmt_fr(seuil_coupure, 1)} €/MWh")
 
-tab1, tab2, tab3 = st.tabs(["Vue d'ensemble", "Analyse des Prix Négatifs", "Analyse des Coupures"])
+tab1, tab2, tab3, tab4 = st.tabs(["Vue d'ensemble", "Analyse des Prix Négatifs", "Analyse des Coupures",
+    "Impact Production/Consommation"])
 
 # ==========================================================
 # ONGLET 1 : VUE D'ENSEMBLE
@@ -305,3 +331,128 @@ with tab3:
             use_container_width=True, hide_index=True)
     else:
         st.info("Aucun épisode de coupure sur la période et le seuil sélectionnés.")
+
+# ==========================================================
+# ONGLET 4 : IMPACT PRODUCTION / CONSOMMATION
+# ==========================================================
+with tab4:
+    st.subheader("Impact du surplus exposé aux heures à prix négatif")
+    st.caption("Croise les heures à prix négatif (période et seuil sélectionnés dans la barre latérale) "
+               "avec vos courbes de production et de consommation, pour estimer le volume d'énergie "
+               "qui aurait dû être écrêté, et comparer deux offres de Responsable d'Équilibre.")
+
+    if not fichiers_prod or not fichiers_conso:
+        st.info("Merci d'importer au moins une courbe de production et une courbe de consommation "
+                "dans la barre latérale (section « Données — Production / Consommation ») pour lancer "
+                "cette analyse.")
+    else:
+        serie_prod = sommer_courbes(fichiers_prod)
+        serie_conso = sommer_courbes(fichiers_conso)
+
+        st.success(f"{len(fichiers_prod)} fichier(s) de production et {len(fichiers_conso)} fichier(s) "
+                   f"de consommation chargés et sommés.")
+
+        coupure_30min = (df["Temps_Coupure"] > 0).resample("30min").max().fillna(False).astype(bool)
+        prix_30min = df["Prix_Positifs"].resample("30min").mean()
+
+        df_impact = pd.DataFrame(index=serie_conso.index)
+        df_impact["prod_kW"] = serie_prod.reindex(df_impact.index) / 1000.0
+        df_impact["conso_kW"] = serie_conso.reindex(df_impact.index) / 1000.0
+        df_impact["en_coupure"] = coupure_30min.reindex(df_impact.index).fillna(False).astype(bool)
+        df_impact["prix_eur_mwh"] = prix_30min.reindex(df_impact.index)
+        df_impact = df_impact.dropna(subset=["prod_kW", "conso_kW"])
+
+        if df_impact.empty:
+            st.warning("Aucun recouvrement temporel entre vos courbes de production/consommation et "
+                       "la période de prix négatifs sélectionnée.")
+        else:
+            df_impact["surplus_kW"] = np.maximum(0.0, df_impact["prod_kW"] - df_impact["conso_kW"])
+            df_impact["surplus_kWh"] = df_impact["surplus_kW"] * 0.5
+
+            surplus_expose = df_impact.loc[df_impact["en_coupure"], "surplus_kWh"]
+            volume_expose_kwh = surplus_expose.sum()
+            volume_expose_mwh = volume_expose_kwh / 1000.0
+
+            col_i1, col_i2 = st.columns(2)
+            with col_i1:
+                st.markdown(carte_indicateur("Surplus exposé aux heures à prix négatif",
+                    f"{fmt_fr(volume_expose_kwh)} kWh", "#FFEBEE", "#C62828",
+                    aide=f"Soit {fmt_fr(volume_expose_mwh, 2)} MWh."), unsafe_allow_html=True)
+            with col_i2:
+                st.markdown(carte_indicateur("Pas de 30 min concernés",
+                    f"{fmt_fr((df_impact['en_coupure']).sum())}", "#FFF3E0", "#E65100"),
+                    unsafe_allow_html=True)
+
+            st.markdown("---")
+            st.subheader("Courbe de charge des excédents exposés")
+            fig_surplus = go.Figure()
+            fig_surplus.add_trace(go.Scatter(x=df_impact.index, y=df_impact["surplus_kW"], mode="lines",
+                name="Surplus (kW)", line=dict(color="#2E7D32", width=1)))
+            surplus_only_coupure = df_impact["surplus_kW"].where(df_impact["en_coupure"])
+            fig_surplus.add_trace(go.Scatter(x=df_impact.index, y=surplus_only_coupure, mode="lines",
+                name="dont exposé (heures à prix négatif)", line=dict(color="#C62828", width=1.5),
+                fill="tozeroy"))
+            fig_surplus.update_layout(title="Surplus de production — exposition aux heures à prix négatif en rouge",
+                xaxis_title="Date", yaxis_title="kW", hovermode="x unified")
+            st.plotly_chart(fig_surplus, use_container_width=True)
+
+            df_impact["mois"] = df_impact.index.to_period("M").astype(str)
+            surplus_mensuel = df_impact[df_impact["en_coupure"]].groupby("mois")["surplus_kWh"].sum().reset_index()
+            fig_mensuel_surplus = go.Figure(go.Bar(x=surplus_mensuel["mois"], y=surplus_mensuel["surplus_kWh"],
+                marker_color="#C62828"))
+            fig_mensuel_surplus.update_layout(title="Surplus exposé par mois", xaxis_title="Mois",
+                yaxis_title="kWh")
+            st.plotly_chart(fig_mensuel_surplus, use_container_width=True)
+
+            st.markdown("---")
+            st.subheader("Comparaison des offres de Responsable d'Équilibre")
+
+            col_p1, col_p2 = st.columns(2)
+            with col_p1:
+                st.markdown("**Offre A — Symphonics (coupure obligatoire)**")
+                symphonics_cout_fixe = st.number_input("Coût fixe annuel (€)", min_value=0.0, value=500.0,
+                    step=50.0, key="symphonics_cout_fixe")
+                symphonics_rachat = st.number_input("Rachat surplus hors coupure (€/MWh)", min_value=0.0,
+                    value=5.0, step=0.5, key="symphonics_rachat")
+            with col_p2:
+                st.markdown("**Offre B — Sunflow (production continue, PRE+)**")
+                sunflow_cout_fixe = st.number_input("Coût fixe annuel (€)", min_value=0.0, value=1200.0,
+                    step=50.0, key="sunflow_cout_fixe")
+                sunflow_rachat_normal = st.number_input("Rachat surplus hors coupure (€/MWh)", min_value=0.0,
+                    value=5.0, step=0.5, key="sunflow_rachat_normal")
+                sunflow_prix_negatif = st.number_input("Prix PRE+ pendant les heures à prix négatif (€/MWh)",
+                    value=0.0, step=0.5, key="sunflow_prix_negatif",
+                    help="À renseigner selon votre contrat Sunflow — peut être négatif si le PRE+ "
+                         "répercute le prix de marché réel.")
+
+            surplus_hors_coupure_kwh = df_impact.loc[~df_impact["en_coupure"], "surplus_kWh"].sum()
+
+            recette_symphonics = surplus_hors_coupure_kwh / 1000.0 * symphonics_rachat
+            net_symphonics = recette_symphonics - symphonics_cout_fixe
+
+            recette_hors_coupure_sunflow = surplus_hors_coupure_kwh / 1000.0 * sunflow_rachat_normal
+            recette_coupure_sunflow = volume_expose_mwh * sunflow_prix_negatif
+            net_sunflow = recette_hors_coupure_sunflow + recette_coupure_sunflow - sunflow_cout_fixe
+
+            ecart = net_sunflow - net_symphonics
+
+            col_r1, col_r2, col_r3 = st.columns(3)
+            with col_r1:
+                st.markdown(carte_indicateur("Résultat net — Symphonics", f"{fmt_fr(net_symphonics)} €",
+                    "#F5F5F5", "#616161"), unsafe_allow_html=True)
+            with col_r2:
+                st.markdown(carte_indicateur("Résultat net — Sunflow", f"{fmt_fr(net_sunflow)} €",
+                    "#F5F5F5", "#616161"), unsafe_allow_html=True)
+            with col_r3:
+                couleur_ecart = "#2E7D32" if ecart > 0 else "#C62828"
+                fond_ecart = "#E8F5E9" if ecart > 0 else "#FFEBEE"
+                st.markdown(carte_indicateur("Écart Sunflow − Symphonics", f"{fmt_fr(ecart)} €",
+                    fond_ecart, couleur_ecart,
+                    aide="Positif = Sunflow plus avantageux. Négatif = Symphonics plus avantageux."),
+                    unsafe_allow_html=True)
+
+            if volume_expose_kwh > 0:
+                impact_c_par_kwh = (recette_coupure_sunflow / volume_expose_kwh) * 100
+                st.caption(f"Valorisation moyenne du surplus exposé sous Sunflow : "
+                           f"{fmt_fr(impact_c_par_kwh, 2)} c€/kWh (à comparer aux "
+                           f"{fmt_fr(symphonics_rachat/10, 2)} c€/kWh de rachat Symphonics hors coupure).")
