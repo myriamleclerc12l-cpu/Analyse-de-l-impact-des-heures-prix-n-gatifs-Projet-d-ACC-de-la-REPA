@@ -127,12 +127,8 @@ if fichier is None:
 
 df_complet = charger_donnees(fichier)
 
-st.sidebar.markdown("---")
-st.sidebar.header("Période d'analyse")
 date_min, date_max = df_complet.index.min().date(), df_complet.index.max().date()
-col_d1, col_d2 = st.sidebar.columns(2)
-date_debut = col_d1.date_input("Début", value=date_min, min_value=date_min, max_value=date_max)
-date_fin = col_d2.date_input("Fin", value=date_max, min_value=date_min, max_value=date_max)
+date_debut, date_fin = date_min, date_max
 
 st.sidebar.markdown("---")
 st.sidebar.header("Seuil de coupure")
