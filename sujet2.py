@@ -83,19 +83,22 @@ def detecter_episodes(df_periode, colonne_coupure):
 
 def charger_courbe_w(fichier):
     df_c = pd.read_excel(fichier)
-    df_c = df_c.iloc[:, :2].copy()  # garde les 2 premières colonnes, quel que soit leur nom exact
+    df_c = df_c.iloc[:, :2].copy()
     df_c.columns = ["timestamp", "value_W"]
     df_c["timestamp"] = pd.to_datetime(df_c["timestamp"], utc=True, dayfirst=True,
         errors="coerce").dt.tz_localize(None)
-    df_c = df_c.dropna(subset=["timestamp"])
+    if not pd.api.types.is_numeric_dtype(df_c["value_W"]):
+        df_c["value_W"] = df_c["value_W"].astype(str).str.replace(",", ".", regex=False)
+    df_c["value_W"] = pd.to_numeric(df_c["value_W"], errors="coerce")
+    df_c = df_c.dropna(subset=["timestamp", "value_W"])
     df_c = df_c.set_index("timestamp").sort_index()
     serie = df_c["value_W"]
     pas_natif = serie.index.to_series().diff().median()
     if pd.notna(pas_natif) and pas_natif != pd.Timedelta(minutes=30):
         if pas_natif < pd.Timedelta(minutes=30):
-            serie = serie.resample("30min").mean()   # pas plus fin -> moyenne
+            serie = serie.resample("30min").mean()
         else:
-            serie = serie.resample("30min").ffill()  # pas plus grossier -> report de la dernière valeur
+            serie = serie.resample("30min").ffill()
     return serie
 
 def sommer_courbes(fichiers):
