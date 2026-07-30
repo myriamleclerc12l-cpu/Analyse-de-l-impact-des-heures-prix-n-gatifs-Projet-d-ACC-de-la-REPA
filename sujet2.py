@@ -82,7 +82,11 @@ def detecter_episodes(df_periode, colonne_coupure):
     return episodes.sort_values("Durée (h)", ascending=False).reset_index(drop=True)
 
 def charger_courbe_w(fichier):
-    df_c = pd.read_excel(fichier)
+    nom_fichier = getattr(fichier, "name", str(fichier))
+    if nom_fichier.lower().endswith(".csv"):
+        df_c = pd.read_csv(fichier, sep=None, engine="python")
+    else:
+        df_c = pd.read_excel(fichier)
     df_c = df_c.iloc[:, :2].copy()
     df_c.columns = ["timestamp", "value_W"]
 
@@ -101,6 +105,7 @@ def charger_courbe_w(fichier):
     df_c["value_W"] = pd.to_numeric(df_c["value_W"], errors="coerce")
 
     df_c = df_c.dropna(subset=["timestamp", "value_W"])
+    df_c = df_c.drop_duplicates(subset=["timestamp"], keep="first")  # anomalies d'export (date non incrémentée)
     df_c = df_c.set_index("timestamp").sort_index()
     serie = df_c["value_W"]
     pas_natif = serie.index.to_series().diff().median()
@@ -157,9 +162,9 @@ st.sidebar.markdown("---")
 st.sidebar.header("Données — Production / Consommation")
 st.sidebar.caption("Optionnel — nécessaire uniquement pour l'onglet « Impact Production/Consommation ». "
                     "Colonnes attendues : timestamp, value (en W).")
-fichiers_prod = st.sidebar.file_uploader("Courbes de production (une ou plusieurs)", type=["xlsx"],
+fichiers_prod = st.sidebar.file_uploader("Courbes de production (une ou plusieurs)", type=["xlsx", "csv"],
     accept_multiple_files=True, key="fichiers_prod_uploader")
-fichiers_conso = st.sidebar.file_uploader("Courbes de consommation (une ou plusieurs)", type=["xlsx"],
+fichiers_conso = st.sidebar.file_uploader("Courbes de consommation (une ou plusieurs)", type=["xlsx", "csv"],
     accept_multiple_files=True, key="fichiers_conso_uploader")
 
 df = df_complet.loc[str(date_debut):str(date_fin)].copy()
