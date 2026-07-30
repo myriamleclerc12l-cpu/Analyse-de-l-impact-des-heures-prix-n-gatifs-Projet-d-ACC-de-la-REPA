@@ -85,11 +85,25 @@ def charger_courbe_w(fichier):
     df_c = pd.read_excel(fichier)
     df_c = df_c.iloc[:, :2].copy()
     df_c.columns = ["timestamp", "value_W"]
-    df_c["timestamp"] = pd.to_datetime(df_c["timestamp"], utc=True, dayfirst=True,
-        errors="coerce").dt.tz_localize(None)
+
+    # Détection et parsing robuste du format de date (3 cas rencontrés) :
+    #   1. Déjà une date Excel native (ex. STEP PIOLINE)
+    #   2. Texte ISO8601 avec fuseau, ex. "2025-01-13T12:30:00+00:00" (ex. BARIDA SUD, Ombrière)
+    #   3. Texte DD/MM/YYYY, ex. "13/02/2025 00:00:00"
+    if pd.api.types.is_datetime64_any_dtype(df_c["timestamp"]):
+        df_c["timestamp"] = pd.to_datetime(df_c["timestamp"])
+    else:
+        ts = pd.to_datetime(df_c["timestamp"], format="ISO8601", utc=True, errors="coerce")
+        if ts.isna().mean() > 0.5:
+            ts = pd.to_datetime(df_c["timestamp"], dayfirst=True, utc=True, errors="coerce")
+        if isinstance(ts.dtype, pd.DatetimeTZDtype):
+            ts = ts.dt.tz_localize(None)
+        df_c["timestamp"] = ts
+
     if not pd.api.types.is_numeric_dtype(df_c["value_W"]):
         df_c["value_W"] = df_c["value_W"].astype(str).str.replace(",", ".", regex=False)
     df_c["value_W"] = pd.to_numeric(df_c["value_W"], errors="coerce")
+
     df_c = df_c.dropna(subset=["timestamp", "value_W"])
     df_c = df_c.set_index("timestamp").sort_index()
     serie = df_c["value_W"]
