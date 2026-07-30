@@ -182,34 +182,45 @@ st.caption(f"Période analysée : du {date_debut.strftime('%d/%m/%Y')} au {date_
 tab1, tab2, tab3, tab4 = st.tabs(["Vue d'ensemble", "Analyse des Prix Négatifs", "Analyse des Coupures",
     "Impact Production/Consommation"])
 
+nb_pas = len(df)
+df_neg = df[df["Prix_Positifs"] < 0]
+df_coupure_t2 = df[df["Prix_Positifs"] <= seuil_coupure]
+
 # ==========================================================
 # ONGLET 1 : VUE D'ENSEMBLE
 # ==========================================================
 with tab1:
-    nb_pas = len(df)
-    nb_jours = (date_fin - date_debut).days + 1
-    temps_coupure_total = df["Temps_Coupure"].sum()
-    pct_coupure = temps_coupure_total / (nb_pas * dt_h) * 100 if nb_pas > 0 else 0
     nb_pas_negatif = (df["Prix_Positifs"] < 0).sum()
     pct_negatif = nb_pas_negatif / nb_pas * 100 if nb_pas > 0 else 0
+    nb_pas_coupure = (df["Prix_Positifs"] <= seuil_coupure).sum()
+    pct_coupure_pas = nb_pas_coupure / nb_pas * 100 if nb_pas > 0 else 0
     prix_moyen_pos = df["Prix_Positifs"].mean()
     prix_min = df["Prix_Positifs"].min()
     date_prix_min = df["Prix_Positifs"].idxmin()
 
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
         st.markdown(carte_indicateur("Temps de coupure total", f"{fmt_fr(temps_coupure_total)} h",
             "#FFEBEE", "#C62828",
-            aide=f"Soit {fmt_fr(temps_coupure_total/24, 1)} jours équivalents, {fmt_fr(pct_coupure, 1)} % du temps."),
+            aide=f"Seuil : {fmt_fr(seuil_coupure, 1)} €/MWh. Soit {fmt_fr(temps_coupure_total/24, 1)} "
+                 f"jours équivalents, {fmt_fr(pct_coupure, 1)} % du temps."),
             unsafe_allow_html=True)
     with col2:
-        st.markdown(carte_indicateur("Pas de temps à prix négatif", f"{fmt_fr(nb_pas_negatif)}",
-            "#FFF3E0", "#E65100", aide=f"{fmt_fr(pct_negatif, 1)} % des {fmt_fr(nb_pas)} pas de 15 min analysés."),
+        st.markdown(carte_indicateur("Pas en coupure", f"{fmt_fr(nb_pas_coupure)}",
+            "#FFEBEE", "#C62828",
+            aide=f"{fmt_fr(pct_coupure_pas, 1)} % des pas, au seuil de {fmt_fr(seuil_coupure, 1)} €/MWh "
+                 f"(réglable dans la barre latérale)."),
             unsafe_allow_html=True)
     with col3:
+        st.markdown(carte_indicateur("Pas à prix négatif", f"{fmt_fr(nb_pas_negatif)}",
+            "#FFF3E0", "#E65100",
+            aide=f"{fmt_fr(pct_negatif, 1)} % des pas. Tout prix < 0 €/MWh — critère plus large que le "
+                 f"seuil de coupure ci-contre."),
+            unsafe_allow_html=True)
+    with col4:
         st.markdown(carte_indicateur("Prix moyen (Écarts Positifs)", f"{fmt_fr(prix_moyen_pos, 2)} €/MWh",
             "#E3F2FD", "#1565C0"), unsafe_allow_html=True)
-    with col4:
+    with col5:
         st.markdown(carte_indicateur("Prix le plus négatif atteint", f"{fmt_fr(prix_min, 2)} €/MWh",
             "#F3E5F5", "#6A1B9A", aide=f"Atteint le {date_prix_min.strftime('%d/%m/%Y à %Hh%M')}."),
             unsafe_allow_html=True)
@@ -241,23 +252,29 @@ with tab1:
 # ==========================================================
 with tab2:
     st.subheader("Distribution et dynamique des prix")
-
     df_neg = df[df["Prix_Positifs"] < 0]
-    col_n1, col_n2, col_n3, col_n4 = st.columns(4)
+    df_coupure_t2 = df[df["Prix_Positifs"] <= seuil_coupure]
+    col_n1, col_n2, col_n3, col_n4, col_n5 = st.columns(5)
     with col_n1:
-        st.markdown(carte_indicateur("Pas à prix négatif", f"{fmt_fr(len(df_neg))}",
-            "#FFF3E0", "#E65100", aide=f"{fmt_fr(len(df_neg)/nb_pas*100, 1)} % de la période."),
-            unsafe_allow_html=True)
+        st.markdown(carte_indicateur("Pas en coupure", f"{fmt_fr(len(df_coupure_t2))}",
+            "#FFEBEE", "#C62828",
+            aide=f"{fmt_fr(len(df_coupure_t2)/nb_pas*100, 1)} % de la période, au seuil de "
+                 f"{fmt_fr(seuil_coupure, 1)} €/MWh."), unsafe_allow_html=True)
     with col_n2:
+        st.markdown(carte_indicateur("Pas à prix négatif", f"{fmt_fr(len(df_neg))}",
+            "#FFF3E0", "#E65100",
+            aide=f"{fmt_fr(len(df_neg)/nb_pas*100, 1)} % de la période. Tout prix < 0 €/MWh — critère "
+                 f"plus large que le seuil de coupure ci-contre."), unsafe_allow_html=True)
+    with col_n3:
         st.markdown(carte_indicateur("Prix négatif moyen", f"{fmt_fr(df_neg['Prix_Positifs'].mean(), 2)} €/MWh"
             if len(df_neg) > 0 else "N/A", "#FFF3E0", "#E65100"), unsafe_allow_html=True)
-    with col_n3:
+    with col_n4:
         st.markdown(carte_indicateur("Écart Positifs vs Négatifs (moyenne)",
             f"{fmt_fr((df['Prix_Negatifs']-df['Prix_Positifs']).mean(), 2)} €/MWh",
             "#E8F5E9", "#2E7D32",
             aide="Écart moyen entre le Prix de Règlement des Écarts Négatifs et Positifs sur la période."),
             unsafe_allow_html=True)
-    with col_n4:
+    with col_n5:
         st.markdown(carte_indicateur("Prix maximum atteint", f"{fmt_fr(df['Prix_Positifs'].max(), 2)} €/MWh",
             "#E3F2FD", "#1565C0"), unsafe_allow_html=True)
 
