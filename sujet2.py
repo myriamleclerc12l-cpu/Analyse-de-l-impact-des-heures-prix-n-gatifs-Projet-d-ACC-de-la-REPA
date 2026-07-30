@@ -420,20 +420,23 @@ with tab4:
             palette_prod = ["#2E7D32", "#66BB6A", "#A5D6A7", "#1B5E20", "#43A047", "#00897B"]
             for i, nom in enumerate(choix_prod):
                 s = serie_prod if nom == "Total (somme)" else courbes_prod[nom]
+                s = s.loc[str(date_debut):str(date_fin)]
                 s_affichee = appliquer_resolution(s, resolution_choisie)
                 fig_courbes.add_trace(go.Scatter(x=s_affichee.index, y=s_affichee / 1000.0, mode="lines",
                     name=f"Prod — {nom}", line=dict(color=palette_prod[i % len(palette_prod)], width=1.3)))
             palette_conso = ["#C62828", "#E57373", "#EF9A9A", "#B71C1C", "#D32F2F", "#F06292"]
             for i, nom in enumerate(choix_conso):
                 s = serie_conso if nom == "Total (somme)" else courbes_conso[nom]
+                s = s.loc[str(date_debut):str(date_fin)]
                 s_affichee = appliquer_resolution(s, resolution_choisie)
                 fig_courbes.add_trace(go.Scatter(x=s_affichee.index, y=s_affichee / 1000.0, mode="lines",
                     name=f"Conso — {nom}", line=dict(color=palette_conso[i % len(palette_conso)], width=1.3)))
-            fig_courbes.update_layout(title=f"Courbes de production et de consommation — {resolution_choisie}",
+            fig_courbes.update_layout(
+                title=f"Courbes de production et de consommation — {resolution_choisie} "
+                      f"({date_debut.strftime('%d/%m/%Y')} au {date_fin.strftime('%d/%m/%Y')})",
                 xaxis_title="Date", yaxis_title="kW", hovermode="x unified",
                 legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="center", x=0.5))
             st.plotly_chart(fig_courbes, use_container_width=True)
-
 
         coupure_30min = (df["Temps_Coupure"] > 0).resample("30min").max().fillna(False).astype(bool)
         prix_30min = df["Prix_Positifs"].resample("30min").mean()
