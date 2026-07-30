@@ -23,7 +23,20 @@ def fmt_fr(x, decimales=0):
     s = f"{x:,.{decimales}f}"
     s = s.replace(",", " ")
     return s
-
+def resample_pour_affichage(serie):
+    """Réduit le nombre de points affichés selon la durée de la période, pour garder le graphique lisible."""
+    duree_jours = (serie.index.max() - serie.index.min()).days + 1
+    if duree_jours <= 3:
+        return serie
+    elif duree_jours <= 14:
+        return serie.resample("2h").mean()
+    elif duree_jours <= 60:
+        return serie.resample("1D").mean()
+    elif duree_jours <= 200:
+        return serie.resample("3D").mean()
+    else:
+        return serie.resample("1W").mean()
+    
 def carte_indicateur(titre, valeur, couleur_fond, couleur_accent, taille_titre=14, taille_valeur=28, aide=None):
     aide_html = f'<span title="{aide}" style="cursor: help; opacity: 0.55;"> ⓘ</span>' if aide else ""
     return f"""
@@ -379,23 +392,27 @@ with tab4:
             options_conso = list(courbes_conso.keys()) + ["Total (somme)"]
             choix_conso = st.multiselect("Courbes de consommation à afficher", options_conso,
                 default=["Total (somme)"], key="choix_courbes_conso")
-
+            
         if choix_prod or choix_conso:
             fig_courbes = go.Figure()
             palette_prod = ["#2E7D32", "#66BB6A", "#A5D6A7", "#1B5E20", "#43A047", "#00897B"]
             for i, nom in enumerate(choix_prod):
                 s = serie_prod if nom == "Total (somme)" else courbes_prod[nom]
-                fig_courbes.add_trace(go.Scatter(x=s.index, y=s / 1000.0, mode="lines",
+                s_affichee = resample_pour_affichage(s)
+                fig_courbes.add_trace(go.Scatter(x=s_affichee.index, y=s_affichee / 1000.0, mode="lines",
                     name=f"Prod — {nom}", line=dict(color=palette_prod[i % len(palette_prod)], width=1.3)))
             palette_conso = ["#C62828", "#E57373", "#EF9A9A", "#B71C1C", "#D32F2F", "#F06292"]
             for i, nom in enumerate(choix_conso):
                 s = serie_conso if nom == "Total (somme)" else courbes_conso[nom]
-                fig_courbes.add_trace(go.Scatter(x=s.index, y=s / 1000.0, mode="lines",
+                s_affichee = resample_pour_affichage(s)
+                fig_courbes.add_trace(go.Scatter(x=s_affichee.index, y=s_affichee / 1000.0, mode="lines",
                     name=f"Conso — {nom}", line=dict(color=palette_conso[i % len(palette_conso)], width=1.3)))
-            fig_courbes.update_layout(title="Courbes de production et de consommation importées",
+            fig_courbes.update_layout(title="Courbes de production et de consommation importées (échelle adaptative)",
                 xaxis_title="Date", yaxis_title="kW", hovermode="x unified",
                 legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="center", x=0.5))
             st.plotly_chart(fig_courbes, use_container_width=True)
+
+
 
         coupure_30min = (df["Temps_Coupure"] > 0).resample("30min").max().fillna(False).astype(bool)
         prix_30min = df["Prix_Positifs"].resample("30min").mean()
