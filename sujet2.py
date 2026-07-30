@@ -381,6 +381,35 @@ with tab4:
                    f"de consommation chargés et sommés.")
         st.markdown("---")
         st.subheader("Courbes de production et de consommation importées")
+        
+        col_v0, col_v1, col_v2 = st.columns([1, 1, 1])
+        with col_v0:
+            resolution_choisie = st.selectbox("Résolution d'affichage", [
+                "Native (pas de 30 min)", "Toutes les 2h (moyenne)", "Journalière (moyenne)",
+                "Journalière (pic)", "Hebdomadaire (moyenne)", "Hebdomadaire (pic)"
+            ], index=3, key="resolution_affichage_courbes",
+               help="« Pic » affiche la valeur maximale de chaque période plutôt que la moyenne — "
+                    "recommandé pour la production solaire, dont la moyenne journalière écrase "
+                    "fortement les pics de milieu de journée.")
+        with col_v1:
+            options_prod = list(courbes_prod.keys()) + ["Total (somme)"]
+            choix_prod = st.multiselect("Courbes de production à afficher", options_prod,
+                default=["Total (somme)"], key="choix_courbes_prod")
+        with col_v2:
+            options_conso = list(courbes_conso.keys()) + ["Total (somme)"]
+            choix_conso = st.multiselect("Courbes de consommation à afficher", options_conso,
+                default=["Total (somme)"], key="choix_courbes_conso")
+
+        toutes_series = list(courbes_prod.values()) + list(courbes_conso.values())
+        date_min_courbes = min(s.index.min() for s in toutes_series).date()
+        date_max_courbes = max(s.index.max() for s in toutes_series).date()
+        col_pd1, col_pd2 = st.columns(2)
+        with col_pd1:
+            date_debut_courbes = st.date_input("Afficher à partir du", value=date_min_courbes,
+                min_value=date_min_courbes, max_value=date_max_courbes, key="date_debut_courbes_input")
+        with col_pd2:
+            date_fin_courbes = st.date_input("Afficher jusqu'au", value=date_max_courbes,
+                min_value=date_min_courbes, max_value=date_max_courbes, key="date_fin_courbes_input")
 
         col_v0, col_v1, col_v2 = st.columns([1, 1, 1])
         with col_v0:
