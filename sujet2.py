@@ -190,6 +190,10 @@ df_coupure_t2 = df[df["Prix_Positifs"] <= seuil_coupure]
 # ONGLET 1 : VUE D'ENSEMBLE
 # ==========================================================
 with tab1:
+    nb_pas = len(df)
+    nb_jours = (date_fin - date_debut).days + 1
+    temps_coupure_total = df["Temps_Coupure"].sum()
+    pct_coupure = temps_coupure_total / (nb_pas * dt_h) * 100 if nb_pas > 0 else 0
     nb_pas_negatif = (df["Prix_Positifs"] < 0).sum()
     pct_negatif = nb_pas_negatif / nb_pas * 100 if nb_pas > 0 else 0
     nb_pas_coupure = (df["Prix_Positifs"] <= seuil_coupure).sum()
