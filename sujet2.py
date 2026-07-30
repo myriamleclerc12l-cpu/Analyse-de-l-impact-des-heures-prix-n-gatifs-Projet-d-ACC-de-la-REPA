@@ -255,6 +255,9 @@ with tab1:
 # ONGLET 2 : ANALYSE DES PRIX NÉGATIFS
 # ==========================================================
 with tab2:
+    nb_pas = len(df)
+    df_neg = df[df["Prix_Positifs"] < 0]
+    df_coupure_t2 = df[df["Prix_Positifs"] <= seuil_coupure]
     st.subheader("Distribution et dynamique des prix")
     df_neg = df[df["Prix_Positifs"] < 0]
     df_coupure_t2 = df[df["Prix_Positifs"] <= seuil_coupure]
