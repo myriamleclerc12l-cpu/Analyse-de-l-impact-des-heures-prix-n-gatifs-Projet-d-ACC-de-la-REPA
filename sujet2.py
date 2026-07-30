@@ -292,6 +292,10 @@ with tab2:
 
     col_h1, col_h2 = st.columns(2)
     with col_h1:
+        st.caption("Pour chaque niveau de prix, le nombre de pas de 15 min de l'année où ce prix a été "
+                   "observé (Prix de Règlement des Écarts Positifs). La grande majorité du temps se "
+                   "concentre autour de 0-100 €/MWh ; les quelques barres qui s'étirent très loin vers "
+                   "la gauche sont les rares épisodes extrêmes (comme celui du 30 mars).")
         fig_hist = go.Figure()
         fig_hist.add_trace(go.Histogram(x=df["Prix_Positifs"], nbinsx=80, marker_color="#1565C0"))
         fig_hist.add_vline(x=0, line_dash="dot", line_color="gray")
@@ -383,7 +387,7 @@ with tab4:
     st.subheader("Impact du surplus exposé aux heures à prix négatif")
     st.caption("Croise les heures à prix négatif (période et seuil sélectionnés dans la barre latérale) "
                "avec vos courbes de production et de consommation, pour estimer le volume d'énergie "
-               "qui aurait dû être écrêté, et comparer deux offres de Responsable d'Équilibre.")
+               "qui aurait dû être écrêté ou perdue en cas d'arrêt de la centrale, et compare deux offres de Responsable d'Équilibre.")
 
     if not fichiers_prod or not fichiers_conso:
         st.info("Merci d'importer au moins une courbe de production et une courbe de consommation "
