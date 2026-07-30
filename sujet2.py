@@ -383,7 +383,7 @@ with tab4:
             resolution_choisie = st.selectbox("Résolution d'affichage", [
                 "Native (pas de 30 min)", "Toutes les 2h (moyenne)", "Journalière (moyenne)",
                 "Journalière (pic)", "Hebdomadaire (moyenne)", "Hebdomadaire (pic)"
-            ], index=3, key="resolution_affichage_courbes",
+            ], index=3, key="resolution_affichage_c",
                help="« Pic » affiche la valeur maximale de chaque période plutôt que la moyenne — "
                     "recommandé pour la production solaire, dont la moyenne journalière écrase "
                     "fortement les pics de milieu de journée.")
