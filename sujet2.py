@@ -86,10 +86,6 @@ def charger_courbe_w(fichier):
     df_c = df_c.iloc[:, :2].copy()
     df_c.columns = ["timestamp", "value_W"]
 
-    # Détection et parsing robuste du format de date (3 cas rencontrés) :
-    #   1. Déjà une date Excel native (ex. STEP PIOLINE)
-    #   2. Texte ISO8601 avec fuseau, ex. "2025-01-13T12:30:00+00:00" (ex. BARIDA SUD, Ombrière)
-    #   3. Texte DD/MM/YYYY, ex. "13/02/2025 00:00:00"
     if pd.api.types.is_datetime64_any_dtype(df_c["timestamp"]):
         df_c["timestamp"] = pd.to_datetime(df_c["timestamp"])
     else:
