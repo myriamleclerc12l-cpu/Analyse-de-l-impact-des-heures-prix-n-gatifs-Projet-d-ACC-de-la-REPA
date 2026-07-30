@@ -377,13 +377,13 @@ with tab4:
                    f"de consommation chargés et sommés.")
         st.markdown("---")
         st.subheader("Courbes de production et de consommation importées")
-        
+
         col_v0, col_v1, col_v2 = st.columns([1, 1, 1])
         with col_v0:
             resolution_choisie = st.selectbox("Résolution d'affichage", [
                 "Native (pas de 30 min)", "Toutes les 2h (moyenne)", "Journalière (moyenne)",
                 "Journalière (pic)", "Hebdomadaire (moyenne)", "Hebdomadaire (pic)"
-            ], index=3, key="resolution_affichage_c",
+            ], index=3, key="resolution_affichage_courbes",
                help="« Pic » affiche la valeur maximale de chaque période plutôt que la moyenne — "
                     "recommandé pour la production solaire, dont la moyenne journalière écrase "
                     "fortement les pics de milieu de journée.")
@@ -407,24 +407,6 @@ with tab4:
             date_fin_courbes = st.date_input("Afficher jusqu'au", value=date_max_courbes,
                 min_value=date_min_courbes, max_value=date_max_courbes, key="date_fin_courbes_input")
 
-        col_v0, col_v1, col_v2 = st.columns([1, 1, 1])
-        with col_v0:
-            resolution_choisie = st.selectbox("Résolution d'affichage", [
-                "Native (pas de 30 min)", "Toutes les 2h (moyenne)", "Journalière (moyenne)",
-                "Journalière (pic)", "Hebdomadaire (moyenne)", "Hebdomadaire (pic)"
-            ], index=3, key="resolution_affichage_courbes",
-               help="« Pic » affiche la valeur maximale de chaque période plutôt que la moyenne — "
-                    "recommandé pour la production solaire, dont la moyenne journalière écrase "
-                    "fortement les pics de milieu de journée.")
-        with col_v1:
-            options_prod = list(courbes_prod.keys()) + ["Total (somme)"]
-            choix_prod = st.multiselect("Courbes de production à afficher", options_prod,
-                default=["Total (somme)"], key="choix_courbes_prod")
-        with col_v2:
-            options_conso = list(courbes_conso.keys()) + ["Total (somme)"]
-            choix_conso = st.multiselect("Courbes de consommation à afficher", options_conso,
-                default=["Total (somme)"], key="choix_courbes_conso")
-
         def appliquer_resolution(serie, choix):
             if choix == "Native (pas de 30 min)":
                 return serie
@@ -445,20 +427,20 @@ with tab4:
             palette_prod = ["#2E7D32", "#66BB6A", "#A5D6A7", "#1B5E20", "#43A047", "#00897B"]
             for i, nom in enumerate(choix_prod):
                 s = serie_prod if nom == "Total (somme)" else courbes_prod[nom]
-                s = s.loc[str(date_debut):str(date_fin)]
+                s = s.loc[str(date_debut_courbes):str(date_fin_courbes)]
                 s_affichee = appliquer_resolution(s, resolution_choisie)
                 fig_courbes.add_trace(go.Scatter(x=s_affichee.index, y=s_affichee / 1000.0, mode="lines",
                     name=f"Prod — {nom}", line=dict(color=palette_prod[i % len(palette_prod)], width=1.3)))
             palette_conso = ["#C62828", "#E57373", "#EF9A9A", "#B71C1C", "#D32F2F", "#F06292"]
             for i, nom in enumerate(choix_conso):
                 s = serie_conso if nom == "Total (somme)" else courbes_conso[nom]
-                s = s.loc[str(date_debut):str(date_fin)]
+                s = s.loc[str(date_debut_courbes):str(date_fin_courbes)]
                 s_affichee = appliquer_resolution(s, resolution_choisie)
                 fig_courbes.add_trace(go.Scatter(x=s_affichee.index, y=s_affichee / 1000.0, mode="lines",
                     name=f"Conso — {nom}", line=dict(color=palette_conso[i % len(palette_conso)], width=1.3)))
             fig_courbes.update_layout(
                 title=f"Courbes de production et de consommation — {resolution_choisie} "
-                      f"({date_debut.strftime('%d/%m/%Y')} au {date_fin.strftime('%d/%m/%Y')})",
+                      f"({date_debut_courbes.strftime('%d/%m/%Y')} au {date_fin_courbes.strftime('%d/%m/%Y')})",
                 xaxis_title="Date", yaxis_title="kW", hovermode="x unified",
                 legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="center", x=0.5))
             st.plotly_chart(fig_courbes, use_container_width=True)
