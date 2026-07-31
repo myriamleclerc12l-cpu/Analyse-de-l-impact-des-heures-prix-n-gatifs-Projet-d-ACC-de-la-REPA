@@ -428,6 +428,22 @@ with tab4:
                        f"Site(s) en ACC : {', '.join(sites_acc) if sites_acc else 'aucun'}.")
 
         surplus_expose_acc = np.maximum(0.0, serie_prod.reindex(serie_conso.index).fillna(0.0) - conso_aci_totale)
+        
+        st.markdown("**Fichiers de production stoppés lors des heures à prix négatif (offre Symphonics)**")
+        fichiers_coupables = st.multiselect(
+            "Sélectionnez la ou les centrale(s) qui s'arrêtent net dès que le prix passe sous le seuil "
+            "— les fichiers non sélectionnés continuent de produire normalement, même sous Symphonics.",
+            list(courbes_prod.keys()), key="fichiers_coupables_select")
+
+        en_coupure_30min = (df["Temps_Coupure"] > 0).resample("30min").max().fillna(False).astype(bool)
+        en_coupure_aligned = en_coupure_30min.reindex(serie_conso.index).fillna(False)
+
+        prod_coupable = sum(courbes_prod[nom] for nom in fichiers_coupables) if fichiers_coupables else pd.Series(0.0, index=serie_conso.index)
+        prod_non_coupable = sum(courbes_prod[nom] for nom in courbes_prod if nom not in fichiers_coupables)
+
+        prod_totale_symphonics = prod_non_coupable + prod_coupable.where(~en_coupure_aligned, 0.0)
+        surplus_acc_symphonics = np.maximum(0.0, prod_totale_symphonics - conso_aci_totale)
+        energie_perdue_symphonics_kwh = (prod_coupable.where(en_coupure_aligned, 0.0)).sum() * 0.5 / 1000.0
 
         st.success(f"{len(fichiers_prod)} fichier(s) de production et {len(fichiers_conso)} fichier(s) "
                    f"de consommation chargés et sommés.")
@@ -568,7 +584,7 @@ with tab4:
 
             col_p1, col_p2 = st.columns(2)
             with col_p1:
-                st.markdown("**Offre A — Symphonics (coupure obligatoire)**")
+                st.markdown("**Offre A — Symphonics (coupure des fichiers sélectionnés ci-dessus)**")
                 symphonics_cout_fixe = st.number_input("Coût fixe annuel (€)", min_value=0.0, value=500.0,
                     step=50.0, key="symphonics_cout_fixe")
                 symphonics_rachat = st.number_input("Rachat surplus hors coupure (€/MWh)", min_value=0.0,
@@ -579,31 +595,64 @@ with tab4:
                     step=50.0, key="sunflow_cout_fixe")
                 sunflow_rachat_normal = st.number_input("Rachat surplus hors coupure (€/MWh)", min_value=0.0,
                     value=5.0, step=0.5, key="sunflow_rachat_normal")
-                mode_prix_sunflow = st.radio("Valorisation PRE+ pendant les heures à prix négatif",
-                    ["Prix fixe", "Prix réel du marché à chaque instant"],
-                    index=1, horizontal=True, key="mode_prix_sunflow",
-                    help="« Prix réel » applique le Prix de Règlement des Écarts Positifs effectif de "
-                         "chaque pas de 30 min (peut être très négatif) — pertinent si votre contrat "
-                         "Sunflow répercute directement le prix de marché. « Prix fixe » applique une "
-                         "seule valeur sur tout le volume exposé, si votre contrat prévoit un tarif "
-                         "négocié constant à la place.")
-                if mode_prix_sunflow == "Prix fixe":
-                    sunflow_prix_negatif = st.number_input("Prix PRE+ fixe (€/MWh)",
-                        value=0.0, step=0.5, key="sunflow_prix_negatif")
+                sunflow_prix_pre_plus = st.number_input("Valorisation PRE+ pendant les heures à prix négatif (€/MWh)",
+                    value=0.0, step=0.5, key="sunflow_prix_pre_plus",
+                    help="Tarif négocié avec Sunflow pour l'agrégation PRE+ — à renseigner vous-même "
+                         "selon votre contrat, peut être négatif.")
 
-            surplus_hors_coupure_kwh = df_impact.loc[~df_impact["en_coupure"], "surplus_kWh"].sum()
+            prix_reel_30min = df["Prix_Positifs"].resample("30min").mean().reindex(serie_conso.index)
 
-            recette_symphonics = surplus_hors_coupure_kwh / 1000.0 * symphonics_rachat
-            net_symphonics = recette_symphonics - symphonics_cout_fixe
+            # --- Symphonics ---
+            surplus_symphonics_hors_coupure_kwh = (surplus_acc_symphonics.where(~en_coupure_aligned, 0.0)).sum() * 0.5 / 1000.0
+            recette_symphonics_hors_coupure = surplus_symphonics_hors_coupure_kwh / 1000.0 * symphonics_rachat
+            # Surplus résiduel injecté pendant la coupure (depuis les fichiers non coupés), valorisé au prix réel
+            recette_symphonics_coupure = ((surplus_acc_symphonics.where(en_coupure_aligned, 0.0) * 0.5 / 1000.0)
+                                            * prix_reel_30min / 1000.0).sum()
+            net_symphonics = recette_symphonics_hors_coupure + recette_symphonics_coupure - symphonics_cout_fixe
 
-            recette_hors_coupure_sunflow = surplus_hors_coupure_kwh / 1000.0 * sunflow_rachat_normal
-            if mode_prix_sunflow == "Prix fixe":
-                recette_coupure_sunflow = volume_expose_mwh * sunflow_prix_negatif
-            else:
-                recette_coupure_sunflow = cout_reel_injection
-            net_sunflow = recette_hors_coupure_sunflow + recette_coupure_sunflow - sunflow_cout_fixe
+            # --- Sunflow ---
+            surplus_sunflow_hors_coupure_kwh = (surplus_expose_acc.where(~en_coupure_aligned, 0.0)).sum() * 0.5 / 1000.0
+            recette_sunflow_hors_coupure = surplus_sunflow_hors_coupure_kwh / 1000.0 * sunflow_rachat_normal
+            surplus_sunflow_coupure_kwh = (surplus_expose_acc.where(en_coupure_aligned, 0.0)).sum() * 0.5 / 1000.0
+            recette_sunflow_coupure = surplus_sunflow_coupure_kwh / 1000.0 * sunflow_prix_pre_plus
+            net_sunflow = recette_sunflow_hors_coupure + recette_sunflow_coupure - sunflow_cout_fixe
 
             ecart = net_sunflow - net_symphonics
+
+            st.markdown("---")
+            col_e1, col_e2 = st.columns(2)
+            with col_e1:
+                st.markdown(carte_indicateur("Énergie perdue si coupure (Symphonics)",
+                    f"{fmt_fr(energie_perdue_symphonics_kwh)} kWh", "#FFEBEE", "#C62828",
+                    aide="Production des fichiers sélectionnés ci-dessus qui n'a jamais lieu, pendant "
+                         "les heures à prix négatif."), unsafe_allow_html=True)
+            with col_e2:
+                st.markdown(carte_indicateur("Coût réel de l'injection (référence, prix de marché)",
+                    f"{fmt_fr(cout_reel_injection)} €", "#FFF3E0", "#E65100",
+                    aide="Coût qu'aurait l'injection de TOUT le surplus ACC exposé, valorisé au prix "
+                         "réel du marché à chaque instant — donnée de référence, indépendante du tarif "
+                         "PRE+ négocié utilisé dans le calcul Sunflow ci-dessous."), unsafe_allow_html=True)
+
+            col_r1, col_r2, col_r3 = st.columns(3)
+            with col_r1:
+                st.markdown(carte_indicateur("Résultat net — Symphonics", f"{fmt_fr(net_symphonics)} €",
+                    "#F5F5F5", "#616161",
+                    aide="Recette hors coupure + recette du surplus résiduel injecté pendant la coupure "
+                         "(depuis les fichiers non coupés, valorisée au prix réel du marché), moins le "
+                         "coût fixe annuel."), unsafe_allow_html=True)
+            with col_r2:
+                st.markdown(carte_indicateur("Résultat net — Sunflow", f"{fmt_fr(net_sunflow)} €",
+                    "#F5F5F5", "#616161",
+                    aide="Recette hors coupure + recette de tout le surplus exposé pendant la coupure "
+                         "(rien n'est coupé), valorisée au tarif PRE+ renseigné ci-dessus, moins le "
+                         "coût fixe annuel."), unsafe_allow_html=True)
+            with col_r3:
+                couleur_ecart = "#2E7D32" if ecart > 0 else "#C62828"
+                fond_ecart = "#E8F5E9" if ecart > 0 else "#FFEBEE"
+                st.markdown(carte_indicateur("Écart Sunflow − Symphonics", f"{fmt_fr(ecart)} €",
+                    fond_ecart, couleur_ecart,
+                    aide="Positif = Sunflow plus avantageux. Négatif = Symphonics plus avantageux."),
+                    unsafe_allow_html=True)
 
             
 
