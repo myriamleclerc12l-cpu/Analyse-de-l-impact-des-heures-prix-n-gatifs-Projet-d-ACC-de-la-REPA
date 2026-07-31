@@ -564,116 +564,50 @@ with tab4:
             st.plotly_chart(fig_mensuel_surplus, use_container_width=True)
 
             st.markdown("---")
-            st.subheader("Offre A — Symphonics (coupure de la centrale)")
-            st.caption("La centrale s'arrête net dès que le prix passe sous le seuil. Seuls les fichiers "
-                       "non sélectionnés continuent de produire, ce qui peut encore générer un léger "
-                       "surplus résiduel même pendant une coupure.")
+            st.subheader("Offre A — Symphonics (coupure totale de la production)")
+            st.caption("Dès que le prix passe sous le seuil, toute la production s'arrête net — aucune "
+                       "recette, aucun coût sur ce volume. Hors coupure, le surplus est racheté à un tarif fixe négocié.")
 
             col_s1, col_s2 = st.columns(2)
             symphonics_cout_fixe = col_s1.number_input("Coût fixe annuel (€)", min_value=0.0, value=500.0,
                 step=50.0, key="symphonics_cout_fixe")
             symphonics_rachat = col_s2.number_input("Rachat surplus hors coupure (€/MWh)", min_value=0.0,
                 value=5.0, step=0.5, key="symphonics_rachat")
-            fichiers_coupables = st.multiselect(
-                "Fichiers de production stoppés lors des heures à prix négatif",
-                list(courbes_prod.keys()), key="fichiers_coupables_select",
-                help="Ces fichiers représentent la centrale qui s'arrête net dès que le prix passe sous "
-                     "le seuil — les fichiers non sélectionnés continuent de produire normalement.")
 
-            prod_coupable = sum(courbes_prod[nom] for nom in fichiers_coupables) if fichiers_coupables else pd.Series(0.0, index=serie_conso.index)
-            prod_non_coupable = sum(courbes_prod[nom] for nom in courbes_prod if nom not in fichiers_coupables)
+            surplus_hors_coupure_kwh = (surplus_expose_acc.where(~en_coupure_aligned, 0.0)).sum() * 0.5 / 1000.0
+            recette_symphonics = surplus_hors_coupure_kwh / 1000.0 * symphonics_rachat
+            energie_perdue_symphonics_kwh = (surplus_expose_acc.where(en_coupure_aligned, 0.0)).sum() * 0.5 / 1000.0
+            net_symphonics = recette_symphonics - symphonics_cout_fixe
 
-            prod_totale_symphonics = prod_non_coupable + prod_coupable.where(~en_coupure_aligned, 0.0)
-            surplus_acc_symphonics = np.maximum(0.0, prod_totale_symphonics - conso_aci_totale)
-            energie_perdue_symphonics_kwh = (prod_coupable.where(en_coupure_aligned, 0.0)).sum() * 0.5 / 1000.0
-
-            surplus_symphonics_hors_coupure_kwh = (surplus_acc_symphonics.where(~en_coupure_aligned, 0.0)).sum() * 0.5 / 1000.0
-            recette_symphonics_hors_coupure = surplus_symphonics_hors_coupure_kwh / 1000.0 * symphonics_rachat
-            recette_symphonics_coupure = ((surplus_acc_symphonics.where(en_coupure_aligned, 0.0) * 0.5 / 1000.0)
-                                            * prix_reel_30min / 1000.0).sum()
-            net_symphonics = recette_symphonics_hors_coupure + recette_symphonics_coupure - symphonics_cout_fixe
-
-            col_rs1, col_rs2, col_rs3, col_rs4 = st.columns(4)
+            col_rs1, col_rs2, col_rs3 = st.columns(3)
             with col_rs1:
-                st.markdown(carte_indicateur("Énergie perdue (coupure)", f"{fmt_fr(energie_perdue_symphonics_kwh)} kWh",
-                    "#FFEBEE", "#C62828", aide="Production stoppée, jamais réalisée pendant les heures à prix négatif."),
-                    unsafe_allow_html=True)
+                st.markdown(carte_indicateur("Énergie perdue (coupure totale)", f"{fmt_fr(energie_perdue_symphonics_kwh)} kWh",
+                    "#FFEBEE", "#C62828", aide="Toute la production qui aurait lieu pendant les heures à prix "
+                    "négatif, jamais réalisée."), unsafe_allow_html=True)
             with col_rs2:
-                st.markdown(carte_indicateur("Recette hors coupure", f"{fmt_fr(recette_symphonics_hors_coupure)} €",
-                    "#F5F5F5", "#616161"), unsafe_allow_html=True)
+                st.markdown(carte_indicateur("Recette (hors coupure uniquement)", f"{fmt_fr(recette_symphonics)} €",
+                    "#F5F5F5", "#616161", aide="Aucune recette ni coût pendant la coupure : production nulle."),
+                    unsafe_allow_html=True)
             with col_rs3:
-                st.markdown(carte_indicateur("Recette résiduelle pendant coupure", f"{fmt_fr(recette_symphonics_coupure)} €",
-                    "#F5F5F5", "#616161",
-                    aide="Surplus encore injecté par les fichiers non coupés pendant la coupure, valorisé "
-                         "au prix réel du marché à chaque instant."), unsafe_allow_html=True)
-            with col_rs4:
                 st.markdown(carte_indicateur("Résultat net Symphonics", f"{fmt_fr(net_symphonics)} €",
                     "#E3F2FD", "#1565C0"), unsafe_allow_html=True)
 
             st.markdown("---")
-            st.subheader("Offre B — Sunflow (production continue)")
-            st.caption("Aucune interruption de production, même aux heures à prix négatif — seul le "
-                       "tarif de valorisation du surplus change selon que le prix est négatif ou non.")
+            st.subheader("Offre B — Sunflow (production continue, prix réel)")
+            st.caption("Aucune interruption de production. Le surplus est valorisé au Prix de Règlement des "
+                       "Écarts Positifs réel, à chaque instant — positif ou négatif.")
 
-            col_f1, col_f2, col_f3 = st.columns(3)
-            sunflow_cout_fixe = col_f1.number_input("Coût fixe annuel (€)", min_value=0.0, value=1200.0,
+            sunflow_cout_fixe = st.number_input("Coût fixe annuel (€)", min_value=0.0, value=1200.0,
                 step=50.0, key="sunflow_cout_fixe")
-            sunflow_rachat_normal = col_f2.number_input("Rachat surplus hors coupure (€/MWh)", min_value=0.0,
-                value=5.0, step=0.5, key="sunflow_rachat_normal")
-            sunflow_prix_pre_plus = col_f3.number_input("Valorisation PRE+ pendant les heures à prix négatif (€/MWh)",
-                value=0.0, step=0.5, key="sunflow_prix_pre_plus",
-                help="Tarif négocié avec Sunflow pour l'agrégation PRE+ — à renseigner vous-même selon "
-                     "votre contrat, peut être négatif.")
 
-            surplus_sunflow_hors_coupure_kwh = (surplus_expose_acc.where(~en_coupure_aligned, 0.0)).sum() * 0.5 / 1000.0
-            recette_sunflow_hors_coupure = surplus_sunflow_hors_coupure_kwh / 1000.0 * sunflow_rachat_normal
-            surplus_sunflow_coupure_kwh = (surplus_expose_acc.where(en_coupure_aligned, 0.0)).sum() * 0.5 / 1000.0
-            recette_sunflow_coupure = surplus_sunflow_coupure_kwh / 1000.0 * sunflow_prix_pre_plus
-            net_sunflow = recette_sunflow_hors_coupure + recette_sunflow_coupure - sunflow_cout_fixe
+            recette_sunflow_totale = (df_impact["surplus_kWh"] * df_impact["prix_eur_mwh"] / 1000.0).sum()
+            net_sunflow = recette_sunflow_totale - sunflow_cout_fixe
 
-            col_rf1, col_rf2, col_rf3, col_rf4 = st.columns(4)
+            col_rf1, col_rf2 = st.columns(2)
             with col_rf1:
-                st.markdown(carte_indicateur("Surplus injecté aux heures à prix négatif", f"{fmt_fr(surplus_sunflow_coupure_kwh)} kWh",
-                    "#E8F5E9", "#2E7D32", aide="Aucun arrêt de production — la totalité du surplus exposé continue d'être injectée."),
-                    unsafe_allow_html=True)
+                st.markdown(carte_indicateur("Recette totale (prix réel, toute la période)", f"{fmt_fr(recette_sunflow_totale)} €",
+                    "#F5F5F5", "#616161", aide="Peut être négative : le prix réel peut être négatif à certains "
+                    "instants, auquel cas injecter coûte réellement de l'argent."), unsafe_allow_html=True)
             with col_rf2:
-                st.markdown(carte_indicateur("Recette aux heures normales", f"{fmt_fr(recette_sunflow_hors_coupure)} €",
-                    "#F5F5F5", "#616161", aide="Surplus injecté hors heures à prix négatif, valorisé au tarif de rachat négocié."),
-                    unsafe_allow_html=True)
-            with col_rf3:
-                st.markdown(carte_indicateur("Recette aux heures à prix négatif", f"{fmt_fr(recette_sunflow_coupure)} €",
-                    "#F5F5F5", "#616161", aide="Surplus injecté pendant les heures à prix négatif, valorisé au tarif PRE+ renseigné ci-dessus."),
-                    unsafe_allow_html=True)
-            with col_rf4:
                 st.markdown(carte_indicateur("Résultat net Sunflow", f"{fmt_fr(net_sunflow)} €",
                     "#E3F2FD", "#1565C0"), unsafe_allow_html=True)
-
-            st.markdown("---")
-            st.subheader("Comparaison finale")
-
-            ecart = net_sunflow - net_symphonics
-            col_c1, col_c2, col_c3 = st.columns(3)
-            with col_c1:
-                st.markdown(carte_indicateur("Résultat net — Symphonics", f"{fmt_fr(net_symphonics)} €",
-                    "#F5F5F5", "#616161"), unsafe_allow_html=True)
-            with col_c2:
-                st.markdown(carte_indicateur("Résultat net — Sunflow", f"{fmt_fr(net_sunflow)} €",
-                    "#F5F5F5", "#616161"), unsafe_allow_html=True)
-            with col_c3:
-                couleur_ecart = "#2E7D32" if ecart > 0 else "#C62828"
-                fond_ecart = "#E8F5E9" if ecart > 0 else "#FFEBEE"
-                st.markdown(carte_indicateur("Écart Sunflow − Symphonics", f"{fmt_fr(ecart)} €",
-                    fond_ecart, couleur_ecart,
-                    aide="Positif = Sunflow plus avantageux. Négatif = Symphonics plus avantageux."),
-                    unsafe_allow_html=True)
-
-            st.markdown("---")
-            st.markdown("**Coût réel de l'injection (référence, prix de marché)**")
-            st.markdown(carte_indicateur("Coût réel si tout était injecté au prix du marché", f"{fmt_fr(cout_reel_injection)} €",
-                "#FFF3E0", "#E65100",
-                aide="Coût qu'aurait l'injection de TOUT le surplus ACC exposé, valorisé au prix réel du "
-                     "marché à chaque instant — donnée de référence indépendante des deux offres ci-dessus."),
-                unsafe_allow_html=True)
-                  
-
-            
