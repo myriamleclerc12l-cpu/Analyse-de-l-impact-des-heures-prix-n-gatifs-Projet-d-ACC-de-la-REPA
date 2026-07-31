@@ -415,29 +415,19 @@ with tab4:
     else:
         courbes_prod, serie_prod = charger_toutes_courbes(fichiers_prod)
         courbes_conso, serie_conso = charger_toutes_courbes(fichiers_conso)
-        
-        perimetre_choisi = st.radio("Périmètre de consommation à analyser",
-            ["ACC uniquement", "ACI uniquement", "ACI + ACC (tous les sites)"],
-            index=2, horizontal=True, key="perimetre_conso_t4",
-            help="Filtre les sites de consommation à inclure dans le calcul du surplus exposé, selon "
-                 "leur type de raccordement renseigné dans la barre latérale.")
 
-        if perimetre_choisi == "ACC uniquement":
-            sites_retenus = [nom for nom in courbes_conso if types_conso.get(nom) == "ACC"]
-        elif perimetre_choisi == "ACI uniquement":
-            sites_retenus = [nom for nom in courbes_conso if types_conso.get(nom) == "ACI"]
+        sites_aci = [nom for nom in courbes_conso if types_conso.get(nom) == "ACI"]
+        sites_acc = [nom for nom in courbes_conso if types_conso.get(nom) == "ACC"]
+
+        if len(sites_aci) == 0:
+            conso_aci_totale = pd.Series(0.0, index=serie_conso.index)
+            st.caption("Aucun site ACI détecté — toute la production est traitée comme exposée en ACC.")
         else:
-            sites_retenus = list(courbes_conso.keys())
+            conso_aci_totale = sum(courbes_conso[nom] for nom in sites_aci).reindex(serie_conso.index).fillna(0.0)
+            st.caption(f"Site(s) en ACI (priorité sur la production) : {', '.join(sites_aci)}. "
+                       f"Site(s) en ACC : {', '.join(sites_acc) if sites_acc else 'aucun'}.")
 
-        if not sites_retenus:
-            st.warning(f"Aucun site de consommation n'est actuellement tagué « {perimetre_choisi.split(' ')[0]} » "
-                       f"dans la barre latérale.")
-            st.stop()
-
-        serie_conso = sum(courbes_conso[nom] for nom in sites_retenus)
-        st.caption(f"Consommation calculée sur {len(sites_retenus)} site(s) : {', '.join(sites_retenus)}")
-        
-        
+        surplus_expose_acc = np.maximum(0.0, serie_prod.reindex(serie_conso.index).fillna(0.0) - conso_aci_totale)
 
         st.success(f"{len(fichiers_prod)} fichier(s) de production et {len(fichiers_conso)} fichier(s) "
                    f"de consommation chargés et sommés.")
@@ -525,7 +515,7 @@ with tab4:
             st.warning("Aucun recouvrement temporel entre vos courbes de production/consommation et "
                        "la période de prix négatifs sélectionnée.")
         else:
-            df_impact["surplus_kW"] = np.maximum(0.0, df_impact["prod_kW"] - df_impact["conso_kW"])
+            df_impact["surplus_kW"] = surplus_expose_acc.reindex(df_impact.index).fillna(0.0) / 1000.0
             df_impact["surplus_kWh"] = df_impact["surplus_kW"] * 0.5
 
             surplus_expose = df_impact.loc[df_impact["en_coupure"], "surplus_kWh"]
