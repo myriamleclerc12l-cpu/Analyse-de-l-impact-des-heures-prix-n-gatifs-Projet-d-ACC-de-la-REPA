@@ -565,24 +565,22 @@ with tab4:
             
             st.markdown("---")
             st.subheader("Relation entre le surplus et le prix")
-            couleurs_points = df_impact["en_coupure"].map({True: "#C62828", False: "#2E7D32"})
+            df_coupure_pts = df_impact[df_impact["en_coupure"]]
+            df_normal_pts = df_impact[~df_impact["en_coupure"]]
+
             fig_scatter = go.Figure()
             fig_scatter.add_trace(go.Scatter(
-                x=df_impact["prix_eur_mwh"], y=df_impact["surplus_kW"], mode="markers",
-                marker=dict(size=5, color=couleurs_points, opacity=0.6),
-                text=df_impact["en_coupure"].map({True: "En coupure", False: "Hors coupure"}),
-                hovertemplate="Prix : %{x:.1f} €/MWh<br>Surplus : %{y:.1f} kW<br>%{text}<extra></extra>"
-            ))
-            fig_scatter.add_vline(x=seuil_coupure, line_dash="dash", line_color="gray",
-                annotation_text=f"Seuil de coupure ({fmt_fr(seuil_coupure, 1)} €/MWh)")
-            fig_scatter.add_vline(x=0, line_dash="dot", line_color="lightgray")
+                x=df_normal_pts["prix_eur_mwh"], y=df_normal_pts["surplus_kW"], mode="markers",
+                name="Prix normal (hors coupure)", marker=dict(size=5, color="#2E7D32", opacity=0.5)))
+            fig_scatter.add_trace(go.Scatter(
+                x=df_coupure_pts["prix_eur_mwh"], y=df_coupure_pts["surplus_kW"], mode="markers",
+                name="Prix négatif (en coupure)", marker=dict(size=5, color="#C62828", opacity=0.7)))
+            fig_scatter.add_vline(x=seuil_coupure, line_dash="dash", line_color="gray")
             fig_scatter.update_layout(
-                title="Chaque point = un pas de 30 min — rouge : en coupure, vert : hors coupure",
-                xaxis_title="Prix réel (€/MWh)", yaxis_title="Surplus exposé (kW)", hovermode="closest")
+                title="Chaque point représente un pas de 30 minutes de l'année",
+                xaxis_title="Prix réel (€/MWh)", yaxis_title="Surplus exposé (kW)",
+                legend_title="Type de période")
             st.plotly_chart(fig_scatter, use_container_width=True)
-            st.caption("Permet de voir si le surplus a tendance à être plus important (ou plus faible) "
-                       "précisément quand le prix est négatif — un lien entre les deux confirmerait par "
-                       "exemple qu'une forte production ACC pousse elle-même le prix à la baisse.")
 
             st.markdown("---")
             st.subheader("Offre A — Symphonics (coupure totale de la production)")
@@ -632,3 +630,21 @@ with tab4:
             with col_rf2:
                 st.markdown(carte_indicateur("Résultat net Sunflow", f"{fmt_fr(net_sunflow)} €",
                     "#E3F2FD", "#1565C0"), unsafe_allow_html=True)
+            st.markdown("---")
+            st.subheader("Comment se construit la recette Sunflow, jour après jour")
+            df_impact_tri = df_impact.sort_index()
+            recette_instant = df_impact_tri["surplus_kWh"] * df_impact_tri["prix_eur_mwh"] / 1000.0
+            recette_cumulee = recette_instant.cumsum()
+
+            fig_cumul = go.Figure()
+            fig_cumul.add_trace(go.Scatter(x=recette_cumulee.index, y=recette_cumulee.values, mode="lines",
+                name="Recette cumulée (€)", line=dict(color="#1565C0", width=2)))
+            fig_cumul.add_hline(y=0, line_dash="dot", line_color="gray")
+            fig_cumul.update_layout(
+                title=f"Recette Sunflow cumulée sur l'année — termine à {fmt_fr(recette_sunflow_totale)} €",
+                xaxis_title="Date", yaxis_title="Recette cumulée (€)", hovermode="x unified")
+            st.plotly_chart(fig_cumul, use_container_width=True)
+            st.caption("Chaque petite baisse visible correspond à un épisode de prix négatif, où le "
+                       "surplus injecté coûte de l'argent plutôt que d'en rapporter. La courbe remonte "
+                       "ensuite grâce aux nombreuses heures à prix normal, bien plus fréquentes sur "
+                       "l'année — d'où le total final positif malgré ces creux.")
