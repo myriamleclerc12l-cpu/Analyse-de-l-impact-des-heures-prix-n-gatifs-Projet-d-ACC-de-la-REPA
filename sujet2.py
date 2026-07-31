@@ -171,6 +171,19 @@ df = df_complet.loc[str(date_debut):str(date_fin)].copy()
 if df.empty:
     st.warning("Aucune donnée sur la période sélectionnée.")
     st.stop()
+    
+fichiers_conso = st.sidebar.file_uploader("Courbes de consommation (une ou plusieurs)", type=["xlsx", "csv"],
+    accept_multiple_files=True, key="fichiers_conso_uploader")
+
+types_conso = {}
+if fichiers_conso:
+    st.sidebar.caption("Type de raccordement, par site de consommation :")
+    for f in fichiers_conso:
+        types_conso[f.name] = st.sidebar.radio(f.name, ["ACI", "ACC"],
+            horizontal=True, key=f"type_conso_{f.name}",
+            help="ACI = Autoconsommation Individuelle (le site consomme uniquement sa propre production "
+                 "dédiée). ACC = Autoconsommation Collective (le site fait partie de la boucle partagée "
+                 "avec les autres sites).")
 
 df["Temps_Coupure"] = np.where(df["Prix_Positifs"] <= seuil_coupure, 0.25, 0.0)
 dt_h = 0.25  # pas de temps natif du fichier (15 min)
@@ -411,6 +424,29 @@ with tab4:
     else:
         courbes_prod, serie_prod = charger_toutes_courbes(fichiers_prod)
         courbes_conso, serie_conso = charger_toutes_courbes(fichiers_conso)
+        
+        perimetre_choisi = st.radio("Périmètre de consommation à analyser",
+            ["ACC uniquement", "ACI uniquement", "ACI + ACC (tous les sites)"],
+            index=2, horizontal=True, key="perimetre_conso_t4",
+            help="Filtre les sites de consommation à inclure dans le calcul du surplus exposé, selon "
+                 "leur type de raccordement renseigné dans la barre latérale.")
+
+        if perimetre_choisi == "ACC uniquement":
+            sites_retenus = [nom for nom in courbes_conso if types_conso.get(nom) == "ACC"]
+        elif perimetre_choisi == "ACI uniquement":
+            sites_retenus = [nom for nom in courbes_conso if types_conso.get(nom) == "ACI"]
+        else:
+            sites_retenus = list(courbes_conso.keys())
+
+        if not sites_retenus:
+            st.warning(f"Aucun site de consommation n'est actuellement tagué « {perimetre_choisi.split(' ')[0]} » "
+                       f"dans la barre latérale.")
+            st.stop()
+
+        serie_conso = sum(courbes_conso[nom] for nom in sites_retenus)
+        st.caption(f"Consommation calculée sur {len(sites_retenus)} site(s) : {', '.join(sites_retenus)}")
+        
+        
 
         st.success(f"{len(fichiers_prod)} fichier(s) de production et {len(fichiers_conso)} fichier(s) "
                    f"de consommation chargés et sommés.")
