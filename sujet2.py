@@ -562,6 +562,27 @@ with tab4:
             fig_mensuel_surplus.update_layout(title="Surplus exposé par mois", xaxis_title="Mois",
                 yaxis_title="kWh")
             st.plotly_chart(fig_mensuel_surplus, use_container_width=True)
+            
+            st.markdown("---")
+            st.subheader("Relation entre le surplus et le prix")
+            couleurs_points = df_impact["en_coupure"].map({True: "#C62828", False: "#2E7D32"})
+            fig_scatter = go.Figure()
+            fig_scatter.add_trace(go.Scatter(
+                x=df_impact["prix_eur_mwh"], y=df_impact["surplus_kW"], mode="markers",
+                marker=dict(size=5, color=couleurs_points, opacity=0.6),
+                text=df_impact["en_coupure"].map({True: "En coupure", False: "Hors coupure"}),
+                hovertemplate="Prix : %{x:.1f} €/MWh<br>Surplus : %{y:.1f} kW<br>%{text}<extra></extra>"
+            ))
+            fig_scatter.add_vline(x=seuil_coupure, line_dash="dash", line_color="gray",
+                annotation_text=f"Seuil de coupure ({fmt_fr(seuil_coupure, 1)} €/MWh)")
+            fig_scatter.add_vline(x=0, line_dash="dot", line_color="lightgray")
+            fig_scatter.update_layout(
+                title="Chaque point = un pas de 30 min — rouge : en coupure, vert : hors coupure",
+                xaxis_title="Prix réel (€/MWh)", yaxis_title="Surplus exposé (kW)", hovermode="closest")
+            st.plotly_chart(fig_scatter, use_container_width=True)
+            st.caption("Permet de voir si le surplus a tendance à être plus important (ou plus faible) "
+                       "précisément quand le prix est négatif — un lien entre les deux confirmerait par "
+                       "exemple qu'une forte production ACC pousse elle-même le prix à la baisse.")
 
             st.markdown("---")
             st.subheader("Offre A — Symphonics (coupure totale de la production)")
