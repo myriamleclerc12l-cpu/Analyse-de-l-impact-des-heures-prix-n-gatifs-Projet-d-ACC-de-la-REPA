@@ -677,8 +677,4 @@ with tab4:
                     aide="Positif = Sunflow plus avantageux. Négatif = Symphonics plus avantageux."),
                     unsafe_allow_html=True)
 
-            if volume_expose_kwh > 0:
-                impact_c_par_kwh = (recette_coupure_sunflow / volume_expose_kwh) * 100
-                st.caption(f"Valorisation moyenne du surplus exposé sous Sunflow : "
-                           f"{fmt_fr(impact_c_par_kwh, 2)} c€/kWh (à comparer aux "
-                           f"{fmt_fr(symphonics_rachat/10, 2)} c€/kWh de rachat Symphonics hors coupure).")
+            
