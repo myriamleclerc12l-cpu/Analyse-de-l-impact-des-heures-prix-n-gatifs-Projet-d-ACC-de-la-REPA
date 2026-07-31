@@ -133,7 +133,6 @@ def charger_toutes_courbes(fichiers):
 # ==========================================================
 # BARRE LATÉRALE — IMPORT ET RÉGLAGES
 # ==========================================================
-
 st.sidebar.header("Données — Prix")
 fichier = st.sidebar.file_uploader("Fichier Excel — Règlement des Écarts", type=["xlsx"])
 
@@ -144,7 +143,6 @@ if fichier is None:
     st.stop()
 
 df_complet = charger_donnees(fichier)
-
 date_min, date_max = df_complet.index.min().date(), df_complet.index.max().date()
 date_debut, date_fin = date_min, date_max
 
@@ -167,14 +165,6 @@ fichiers_prod = st.sidebar.file_uploader("Courbes de production (une ou plusieur
 fichiers_conso = st.sidebar.file_uploader("Courbes de consommation (une ou plusieurs)", type=["xlsx", "csv"],
     accept_multiple_files=True, key="fichiers_conso_uploader")
 
-df = df_complet.loc[str(date_debut):str(date_fin)].copy()
-if df.empty:
-    st.warning("Aucune donnée sur la période sélectionnée.")
-    st.stop()
-    
-fichiers_conso = st.sidebar.file_uploader("Courbes de consommation (une ou plusieurs)", type=["xlsx", "csv"],
-    accept_multiple_files=True, key="fichiers_conso_uploader")
-
 types_conso = {}
 if fichiers_conso:
     st.sidebar.caption("Type de raccordement, par site de consommation :")
@@ -185,6 +175,11 @@ if fichiers_conso:
                  "dédiée). ACC = Autoconsommation Collective (le site fait partie de la boucle partagée "
                  "avec les autres sites).")
 
+df = df_complet.loc[str(date_debut):str(date_fin)].copy()
+if df.empty:
+    st.warning("Aucune donnée sur la période sélectionnée.")
+    st.stop()
+
 df["Temps_Coupure"] = np.where(df["Prix_Positifs"] <= seuil_coupure, 0.25, 0.0)
 dt_h = 0.25  # pas de temps natif du fichier (15 min)
 
@@ -194,10 +189,6 @@ st.caption(f"Période analysée : du {date_debut.strftime('%d/%m/%Y')} au {date_
 
 tab1, tab2, tab3, tab4 = st.tabs(["Vue d'ensemble", "Analyse des Prix Négatifs", "Analyse des Coupures",
     "Impact Production/Consommation"])
-
-nb_pas = len(df)
-df_neg = df[df["Prix_Positifs"] < 0]
-df_coupure_t2 = df[df["Prix_Positifs"] <= seuil_coupure]
 
 # ==========================================================
 # ONGLET 1 : VUE D'ENSEMBLE
