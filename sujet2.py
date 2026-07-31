@@ -523,14 +523,24 @@ with tab4:
             volume_expose_mwh = volume_expose_kwh / 1000.0
 
             col_i1, col_i2 = st.columns(2)
+            cout_reel_injection = (df_impact.loc[df_impact["en_coupure"], "surplus_kWh"] *
+                                    df_impact.loc[df_impact["en_coupure"], "prix_eur_mwh"] / 1000.0).sum()
+
+            col_i1, col_i2 = st.columns(2)
             with col_i1:
-                st.markdown(carte_indicateur("Surplus exposé aux heures à prix négatif",
+                st.markdown(carte_indicateur("Énergie perdue en cas de coupure",
                     f"{fmt_fr(volume_expose_kwh)} kWh", "#FFEBEE", "#C62828",
-                    aide=f"Soit {fmt_fr(volume_expose_mwh, 2)} MWh."), unsafe_allow_html=True)
+                    aide=f"Soit {fmt_fr(volume_expose_mwh, 2)} MWh. C'est la production qui aurait lieu "
+                         f"pendant les heures à prix négatif — si la centrale s'arrête à chaque fois "
+                         f"(comme sous l'offre Symphonics), c'est exactement cette énergie qui n'est "
+                         f"jamais produite."), unsafe_allow_html=True)
             with col_i2:
-                st.markdown(carte_indicateur("Pas de 30 min concernés",
-                    f"{fmt_fr((df_impact['en_coupure']).sum())}", "#FFF3E0", "#E65100"),
-                    unsafe_allow_html=True)
+                st.markdown(carte_indicateur("Coût réel de l'injection à prix négatif",
+                    f"{fmt_fr(cout_reel_injection)} €", "#FFF3E0", "#E65100",
+                    aide="Somme, pas de 30 min par pas de 30 min, du surplus injecté multiplié par le "
+                         "prix réel à cet instant (pas le seuil, ni une moyenne) — le vrai montant "
+                         "supporté (ou évité si vous coupez) sur toute la période, d'après le fichier "
+                         "de Règlement des Écarts."), unsafe_allow_html=True)
 
             st.markdown("---")
             st.subheader("Courbe de charge des excédents exposés")
@@ -569,10 +579,17 @@ with tab4:
                     step=50.0, key="sunflow_cout_fixe")
                 sunflow_rachat_normal = st.number_input("Rachat surplus hors coupure (€/MWh)", min_value=0.0,
                     value=5.0, step=0.5, key="sunflow_rachat_normal")
-                sunflow_prix_negatif = st.number_input("Prix PRE+ pendant les heures à prix négatif (€/MWh)",
-                    value=0.0, step=0.5, key="sunflow_prix_negatif",
-                    help="À renseigner selon votre contrat Sunflow — peut être négatif si le PRE+ "
-                         "répercute le prix de marché réel.")
+                mode_prix_sunflow = st.radio("Valorisation PRE+ pendant les heures à prix négatif",
+                    ["Prix fixe", "Prix réel du marché à chaque instant"],
+                    index=1, horizontal=True, key="mode_prix_sunflow",
+                    help="« Prix réel » applique le Prix de Règlement des Écarts Positifs effectif de "
+                         "chaque pas de 30 min (peut être très négatif) — pertinent si votre contrat "
+                         "Sunflow répercute directement le prix de marché. « Prix fixe » applique une "
+                         "seule valeur sur tout le volume exposé, si votre contrat prévoit un tarif "
+                         "négocié constant à la place.")
+                if mode_prix_sunflow == "Prix fixe":
+                    sunflow_prix_negatif = st.number_input("Prix PRE+ fixe (€/MWh)",
+                        value=0.0, step=0.5, key="sunflow_prix_negatif")
 
             surplus_hors_coupure_kwh = df_impact.loc[~df_impact["en_coupure"], "surplus_kWh"].sum()
 
@@ -580,10 +597,16 @@ with tab4:
             net_symphonics = recette_symphonics - symphonics_cout_fixe
 
             recette_hors_coupure_sunflow = surplus_hors_coupure_kwh / 1000.0 * sunflow_rachat_normal
-            recette_coupure_sunflow = volume_expose_mwh * sunflow_prix_negatif
+            if mode_prix_sunflow == "Prix fixe":
+                recette_coupure_sunflow = volume_expose_mwh * sunflow_prix_negatif
+            else:
+                recette_coupure_sunflow = cout_reel_injection
             net_sunflow = recette_hors_coupure_sunflow + recette_coupure_sunflow - sunflow_cout_fixe
 
             ecart = net_sunflow - net_symphonics
+
+            
+
 
             col_r1, col_r2, col_r3 = st.columns(3)
             with col_r1:
